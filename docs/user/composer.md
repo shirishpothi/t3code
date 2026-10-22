@@ -12,6 +12,16 @@ becomes an attachment when inserting it would exceed the message limit. On a
 hardware keyboard, use `Cmd+Shift+V` on Apple devices or `Ctrl+Shift+V` elsewhere
 to keep a large paste editable in the composer instead.
 
+## Undo draft edits on iPhone
+
+While editing a draft, shake your iPhone and choose **Undo**. Shake again to
+choose **Redo**. You can cancel either action to keep your draft as it is.
+This uses the editor's current undo history; sending or replacing the draft
+clears that history. It does not undo sent messages or agent code changes.
+
+If shaking does nothing, check **Settings → Accessibility → Touch → Shake to
+Undo** on your iPhone.
+
 ## Attach files
 
 Attach up to 100 files per message. Each image can be up to 10 MiB, with at most

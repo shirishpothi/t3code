@@ -101,6 +101,53 @@ private final class ComposerTextView: UITextView {
   var enterBehavior: ComposerEnterBehavior = .send
   private var bypassTextPasteInterception = false
 
+  override func motionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {
+    guard motion == .motionShake else {
+      super.motionEnded(motion, with: event)
+      return
+    }
+    guard isFirstResponder, isEditable, !isReadOnly,
+          markedTextRange == nil, UIAccessibility.isShakeToUndoEnabled,
+          let manager = undoManager, manager.canUndo || manager.canRedo else {
+      return
+    }
+    var responder: UIResponder? = next
+    while let current = responder, !(current is UIViewController) {
+      responder = current.next
+    }
+    guard let presenter = responder as? UIViewController,
+          presenter.presentedViewController == nil else {
+      return
+    }
+
+    let document = NSAttributedString(attributedString: attributedText)
+    let selection = selectedRange
+    let alert = UIAlertController(
+      title: manager.canUndo ? "Undo draft edit?" : "Redo draft edit?",
+      message: nil,
+      preferredStyle: .alert
+    )
+    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+    for redo in [false, true] where redo ? manager.canRedo : manager.canUndo {
+      alert.addAction(UIAlertAction(title: redo ? "Redo" : "Undo", style: .default) { [weak self] _ in
+        // A send, thread switch, or controlled update may replace the draft
+        // while the confirmation is open. Never apply its old undo stack.
+        guard let self, self.window != nil, self.isEditable, !self.isReadOnly,
+              self.markedTextRange == nil, self.undoManager === manager,
+              self.attributedText.isEqual(to: document),
+              NSEqualRanges(self.selectedRange, selection) else {
+          return
+        }
+        if redo {
+          if manager.canRedo { manager.redo() }
+        } else {
+          if manager.canUndo { manager.undo() }
+        }
+      })
+    }
+    presenter.present(alert, animated: !UIAccessibility.isReduceMotionEnabled)
+  }
+
   override var keyCommands: [UIKeyCommand]? {
     var commands = super.keyCommands ?? []
     guard !isReadOnly, markedTextRange == nil else { return commands }
@@ -802,7 +849,13 @@ public final class T3ComposerEditorView: ExpoView, UITextViewDelegate, UITextDro
 
     let previousSelection = sourceSelection()
     isApplyingControlledValue = true
-    textView.attributedText = makeAttributedDocument()
+    let document = makeAttributedDocument()
+    // Native undo ranges belong to the displayed document, including collapsed
+    // context chips. A replacement or send must not retain those old ranges.
+    if currentSource != value || textView.attributedText.string != document.string {
+      textView.undoManager?.removeAllActions()
+    }
+    textView.attributedText = document
     let targetSelection = requestedSelection ?? previousSelection
     requestedSelection = nil
     textView.selectedRange = displayRange(for: targetSelection)
